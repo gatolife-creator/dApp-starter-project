@@ -1,39 +1,40 @@
 import React, { useEffect, useState } from "react";
 import "./App.css";
 import { ethers } from "ethers";
-import abi from "./utils/WavePortal.json";
+import abi from "./utils/URL_Forum.json";
 
 export default function App() {
   const [currentAccount, setCurrentAccount] = useState("");
   const [messageValue, setMessageValue] = useState("");
   console.log("currentAccount", currentAccount);
-  const contractAddress = "0x76E60A83605F97A4fdDDC9efDDCc2276E35dc02c";
+  const contractAddress = "0x6D8470F6BA4aDe9F9d717f8ab31D42C8019E70D1";
   const contractABI = abi.abi;
-  const [allWaves, setAllWaves] = useState([]);
+  const [allPosts, setAllPosts] = useState([]);
 
-  const getAllWaves = async () => {
+  const getAllPosts = async () => {
     const { ethereum } = window;
 
     try {
       if (ethereum) {
         const provider = new ethers.providers.Web3Provider(ethereum);
         const signer = provider.getSigner();
-        const wavePortalContract = new ethers.Contract(
+        const URL_ForumContract = new ethers.Contract(
           contractAddress,
           contractABI,
           signer
         );
 
-        const waves = await wavePortalContract.getAllWaves();
-        const wavesCleaned = waves.map((wave) => {
+        const posts = await URL_ForumContract.getAllPosts();
+        const postsCleaned = posts.map((post) => {
           return {
-            address: wave.waver,
-            timestamp: new Date(wave.timestamp * 1000),
-            message: wave.message,
+            address: post.poster,
+            timestamp: new Date(post.timestamp * 1000),
+            message: post.message,
+            reward: post.reward.toNumber(),
           };
         });
 
-        setAllWaves(wavesCleaned);
+        setAllPosts(postsCleaned);
       } else {
         console.log("Ethereum object doesn't exist!");
       }
@@ -58,7 +59,7 @@ export default function App() {
         const account = accounts[0];
         console.log("Found an authored account: ", account);
         setCurrentAccount(account);
-        getAllWaves();
+        getAllPosts();
       } else {
         console.log("No authorized account found");
       }
@@ -82,7 +83,7 @@ export default function App() {
     }
   };
 
-  const wave = async () => {
+  const post = async () => {
     try {
       const { ethereum } = window;
       if (ethereum) {
@@ -90,15 +91,14 @@ export default function App() {
         console.log(await provider.getCode(contractAddress));
         const signer = provider.getSigner();
         // コントラクトインスタンスは、コントラクトに格納されている全ての関数を利用することができる
-        const wavePortalContract = new ethers.Contract(
+        const URL_ForumContract = new ethers.Contract(
           contractAddress,
           contractABI,
           signer
         );
-        let count = await wavePortalContract.getTotalWaves();
-        console.log("Retrieved total wave count...", count.toNumber());
+
         let contractBalance = await provider.getBalance(
-          wavePortalContract.address
+          URL_ForumContract.address
         );
         console.log(
           "Contract balance:",
@@ -106,7 +106,7 @@ export default function App() {
         );
 
         let contractBalance_post = await provider.getBalance(
-          wavePortalContract.address
+          URL_ForumContract.address
         );
         if (contractBalance_post.lt(contractBalance)) {
           console.log("User won ETH!");
@@ -118,15 +118,12 @@ export default function App() {
           ethers.utils.formatEther(contractBalance_post)
         );
 
-        const waveTx = await wavePortalContract.wave(messageValue, {
+        const postTx = await URL_ForumContract.post(messageValue, {
           gasLimit: 300000,
         });
-        console.log("Mining...", waveTx.hash);
-        await waveTx.wait();
-        console.log("Mined...", waveTx.hash);
-
-        count = await wavePortalContract.getTotalWaves();
-        console.log("Retrieved total wave count...", count.toNumber());
+        console.log("Mining...", postTx.hash);
+        await postTx.wait();
+        console.log("Mined...", postTx.hash);
       } else {
         console.log("Ethereum object doesn't exit.");
       }
@@ -138,14 +135,15 @@ export default function App() {
   useEffect(() => {
     let wavePortalContract;
 
-    const onNewWave = (from, timestamp, message) => {
-      console.log("NewWave", from, timestamp, message);
-      setAllWaves((prevState) => [
+    const onNewPost = (from, timestamp, message, reward) => {
+      console.log("NewPost", from, timestamp, message, reward);
+      setAllPosts((prevState) => [
         ...prevState,
         {
           address: from,
           timestamp: new Date(timestamp * 1000),
           message: message,
+          reward: reward.toNumber(),
         },
       ]);
     };
@@ -159,12 +157,12 @@ export default function App() {
         contractABI,
         signer
       );
-      wavePortalContract.on("NewWave", onNewWave);
+      wavePortalContract.on("NewPost", onNewPost);
     }
 
     return () => {
       if (wavePortalContract) {
-        wavePortalContract.off("NewWave", onNewWave);
+        wavePortalContract.off("NewPost", onNewPost);
       }
     };
   }, []);
@@ -183,19 +181,8 @@ export default function App() {
           WELCOME!
         </div>
 
-        <div className="bio">
-          イーサリアムウォレットを接続して、メッセージを作成したら、
-          <span role="img" aria-label="hand-wave">
-            👋
-          </span>
-          を送ってください
-          <span role="img" aria-label="shine">
-            ✨
-          </span>
-        </div>
-
-        <button className="waveButton" onClick={wave}>
-          Wave at Me
+        <button className="waveButton" onClick={post}>
+          Post
         </button>
 
         {!currentAccount && (
@@ -222,10 +209,10 @@ export default function App() {
         )}
 
         {currentAccount &&
-          allWaves
+          allPosts
             .slice(0)
             .reverse()
-            .map((wave, index) => {
+            .map((post, index) => {
               return (
                 <div
                   key={index}
@@ -235,9 +222,10 @@ export default function App() {
                     padding: "8px",
                   }}
                 >
-                  <div>Address: {wave.address}</div>
-                  <div>Time: {wave.timestamp.toString()}</div>
-                  <div>Message: {wave.message}</div>
+                  <div>{post.timestamp.toString()}</div>
+                  <div>Address: {post.address}</div>
+                  <div>Message: {post.message}</div>
+                  <div>Reward: {post.reward} Wei</div>
                 </div>
               );
             })}
